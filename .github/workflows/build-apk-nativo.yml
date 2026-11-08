@@ -104,6 +104,10 @@ jobs:
           cp -r "$WRAP_TMP/gradle/." gradle/
           cp "$WRAP_TMP/gradlew" "$WRAP_TMP/gradlew.bat" .
           chmod +x gradlew
+          # v10.2 · services.gradle.org a veces tarda más de los 10 s por defecto: se sube el timeout
+          # y se reintenta SOLO la descarga de Gradle (la compilación se ejecuta una vez).
+          sed -i 's/^networkTimeout=.*/networkTimeout=120000/' gradle/wrapper/gradle-wrapper.properties
+          ./gradlew --version --no-daemon || (sleep 20 && ./gradlew --version --no-daemon) || (sleep 40 && ./gradlew --version --no-daemon)
           ./gradlew assembleDebug --no-daemon
       - name: Crear release con el APK
         env:
