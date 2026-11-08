@@ -99,7 +99,7 @@ jobs:
           # la compilación la hace ya el Gradle fijado por el wrapper.
           WRAP_TMP="$(mktemp -d)"
           touch "$WRAP_TMP/settings.gradle"
-          (cd "$WRAP_TMP" && gradle wrapper --gradle-version 8.7 --no-daemon)
+          (cd "$WRAP_TMP" && (gradle wrapper --gradle-version 8.7 --no-validate-url --no-daemon || (sleep 15 && gradle wrapper --gradle-version 8.7 --no-validate-url --no-daemon)))
           mkdir -p gradle
           cp -r "$WRAP_TMP/gradle/." gradle/
           cp "$WRAP_TMP/gradlew" "$WRAP_TMP/gradlew.bat" .
