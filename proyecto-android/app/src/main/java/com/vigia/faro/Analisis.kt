@@ -37,7 +37,7 @@ object Portal {
     }
 }
 
-class Hallazgo(val riesgo: Riesgo, val titulo: String, val detalle: String, val accion: String)
+class Hallazgo(val riesgo: Riesgo, val titulo: String, val detalle: String, val accion: String, val fuente: String = "")
 
 class Informe(val puntuacion: Int, val veredicto: String, val hallazgos: List<Hallazgo>)
 
@@ -77,7 +77,8 @@ object Analisis {
         portal: ResultadoPortal,
         router: Dispositivo?,
         dispositivos: List<Dispositivo>,
-        upnpRouter: Boolean
+        upnpRouter: Boolean,
+        forenses: List<Hallazgo> = emptyList()
     ): Informe {
         val h = ArrayList<Hallazgo>()
 
@@ -173,6 +174,8 @@ object Analisis {
             h.add(Hallazgo(Riesgo.INFO, sinIdentificar.toString() + " dispositivos sin identificar", "No respondieron con un nombre ni con servicios reconocibles.", "Comprueba que sabes qué son (televisores, bombillas, enchufes inteligentes…)."))
         }
 
+        h.addAll(forenses)
+
         var puntos = 100
         for (x in h) puntos -= x.riesgo.peso
         puntos = puntos.coerceIn(0, 100)
@@ -210,6 +213,22 @@ object Analisis {
             }
         }
         sb.append("\nGenerado por El Faro. Es una guía orientativa, no una auditoría.\n")
+        return sb.toString()
+    }
+
+    /** Informe en texto plano con todo lo que averiguó el análisis forense. */
+    fun textoCompleto(res: ResultadoAnalisis): String {
+        val sb = StringBuilder(texto(res.red, res.informe, res.router, res.dispositivos.filter { !it.esRouter }))
+        val f = res.forense ?: return sb.toString()
+        for (s in f.secciones) {
+            sb.append('\n').append(s.titulo.uppercase()).append('\n')
+            for (l in s.lineas) sb.append("  ").append(l).append('\n')
+        }
+        if (f.limitaciones.isNotEmpty()) {
+            sb.append("\nNO SE PUDO COMPROBAR\n")
+            for (l in f.limitaciones) sb.append("  ").append(l).append('\n')
+        }
+        if (res.huellaEvidencia.isNotEmpty()) sb.append("\nHuella de la evidencia (SHA-256): ").append(res.huellaEvidencia).append('\n')
         return sb.toString()
     }
 }
