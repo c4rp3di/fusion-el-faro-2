@@ -53,6 +53,13 @@ class Dispositivo(val ip: String) {
     val servicios = LinkedHashSet<String>()
     val puertos = ArrayList<PuertoAbierto>()
 
+    /** Certificado TLS que presenta el equipo en su puerto HTTPS, si lo tiene. */
+    var certInfo: com.vigia.faro.forense.CertDispositivo.Info? = null
+
+    val certificado: String? get() = certInfo?.resumen()
+
+    val macAleatoria: Boolean get() = com.vigia.faro.forense.Oui.esAleatoria(mac)
+
     val riesgoMaximo: Riesgo
         get() = puertos.map { it.def.riesgo }.minByOrNull { it.ordinal } ?: Riesgo.INFO
 
@@ -419,11 +426,11 @@ object Descubridor {
             abiertos.contains(554) || contiene("camera", "ipcam", "hikvision", "dahua", "reolink", "imou", "tapo", "wyze") -> Tipo.CAMARA
             abiertos.contains(8008) || abiertos.contains(8009) ||
                 contiene("_googlecast", "chromecast", "bravia", "tizen", "webos", "roku", "firetv", "smarttv", "mediarenderer", "android tv", "_airplay") -> Tipo.TV
-            contiene("sonos", "alexa", "echo", "homepod", "_hap", "homekit", "hue", "nest", "_spotify-connect") -> Tipo.ALTAVOZ
+            contiene("sonos", "alexa", "echo", "homepod", "_hap", "homekit", "hue", "nest", "_spotify-connect", "espressif", "tuya", "shelly") -> Tipo.ALTAVOZ
             abiertos.contains(5000) || contiene("synology", "diskstation", "qnap", "nas", "readynas") -> Tipo.NAS
             abiertos.contains(62078) || contiene("iphone", "ipad", "android", "galaxy", "pixel", "xiaomi", "redmi", "huawei", "oneplus", "oppo", "_companion-link") -> Tipo.MOVIL
             abiertos.contains(445) || abiertos.contains(139) || abiertos.contains(3389) || abiertos.contains(5900) ||
-                contiene("desktop", "laptop", "windows", "macbook", "imac", "_workstation", "_smb") -> Tipo.PC
+                contiene("desktop", "laptop", "windows", "macbook", "imac", "_workstation", "_smb", "raspberry", "vmware", "virtualbox", "qemu") -> Tipo.PC
             else -> Tipo.DESCONOCIDO
         }
     }
