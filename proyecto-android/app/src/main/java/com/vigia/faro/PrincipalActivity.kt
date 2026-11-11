@@ -21,6 +21,7 @@ import com.vigia.core.ui.Dialogos
 import com.vigia.core.ui.TipoBoton
 import com.vigia.core.ui.Vistas
 import com.vigia.core.util.Formato
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.vigia.faro.adb.GestorAdb
 import com.vigia.faro.forense.Evidencia
 import com.vigia.faro.forense.Indicadores
@@ -107,6 +108,19 @@ class PrincipalActivity : ActividadBase() {
         forense.addView(Vistas.boton(this, "Verificar un paquete de evidencia", TipoBoton.TONAL) { abrirEvidencia.launch(arrayOf("*/*")) }, Vistas.anchoCompleto(this, 0))
         raiz.addView(forense, Vistas.anchoCompleto(this, 12))
 
+        val bluetooth = Vistas.tarjeta(this)
+        bluetooth.addView(Vistas.subtitulo(this, "Bluetooth"), Vistas.anchoCompleto(this, 6))
+        bluetooth.addView(
+            Vistas.texto(
+                this,
+                "Análisis puntual de lo que hay a tu alrededor: dispositivos cercanos, posibles rastreadores (AirTag, SmartTag, Tile), visibilidad de tu teléfono y dispositivos emparejados.",
+                true
+            ),
+            Vistas.anchoCompleto(this, 8)
+        )
+        bluetooth.addView(Vistas.boton(this, "Análisis Bluetooth", TipoBoton.TONAL) { startActivity(Intent(this, BluetoothActivity::class.java)) }, Vistas.anchoCompleto(this, 0))
+        raiz.addView(bluetooth, Vistas.anchoCompleto(this, 12))
+
         botonForense = Vistas.boton(this, "Análisis forense total (tu red y tu teléfono)") { iniciar(Opciones(true, true, cajaInternet.isChecked)) }
         raiz.addView(botonForense, Vistas.anchoCompleto(this, 6))
         botonCompleto = Vistas.boton(this, "Análisis completo (router y dispositivos)", TipoBoton.TONAL) { iniciar(Opciones(true, false, cajaInternet.isChecked)) }
@@ -144,6 +158,7 @@ class PrincipalActivity : ActividadBase() {
             if (r.portalMarcado) sb.append("\n⚠ Android la marca como red con portal cautivo.")
         }
         textoRed.text = sb.toString()
+        textoRed.setOnClickListener { detalleRed(r) }
         botonUbicacion.visibility = if (r.faltaUbicacion) View.VISIBLE else View.GONE
         val puede = r.esWifi && r.gateway != null && r.ipLocal != null && trabajo?.isActive != true
         botonCompleto.isEnabled = puede
@@ -254,7 +269,8 @@ class PrincipalActivity : ActividadBase() {
         val color = if (res.informe.puntuacion >= 85) R.color.vc_ok else if (res.informe.puntuacion >= 65) R.color.vc_aviso else R.color.vc_peligro
         grande.setTextColor(Vistas.color(this, color))
         t.addView(grande, Vistas.anchoCompleto(this, 4))
-        t.addView(Vistas.texto(this, "Puntuación orientativa: resume lo que se pudo comprobar desde este teléfono. No es una auditoría completa.", true))
+        t.addView(Vistas.texto(this, "Puntuación orientativa: resume lo que se pudo comprobar desde este teléfono. No es una auditoría completa. Toca para ver cómo se calcula.", true))
+        t.setOnClickListener { detallePuntuacion(res) }
         resultados.addView(t, Vistas.anchoCompleto(this, 12))
 
         resultados.addView(Vistas.subtitulo(this, "Hallazgos"), Vistas.anchoCompleto(this, 6))
@@ -265,10 +281,11 @@ class PrincipalActivity : ActividadBase() {
             for (sec in f.secciones) {
                 resultados.addView(Vistas.subtitulo(this, sec.titulo), Vistas.anchoCompleto(this, 6))
                 val tarj = Vistas.tarjeta(this)
-                val txt = Vistas.texto(this, sec.lineas.joinToString("\n"), true)
+                val resumen = if (sec.lineas.size > 12) sec.lineas.take(12).joinToString("\n") + "\n… (" + (sec.lineas.size - 12) + " líneas más: toca para verlas)" else sec.lineas.joinToString("\n")
+                val txt = Vistas.texto(this, resumen, true)
                 txt.textSize = 12f
-                txt.setTextIsSelectable(true)
                 tarj.addView(txt)
+                tarj.setOnClickListener { detalleSeccion(sec) }
                 resultados.addView(tarj, Vistas.anchoCompleto(this, 8))
             }
             if (f.limitaciones.isNotEmpty()) {
@@ -312,12 +329,16 @@ class PrincipalActivity : ActividadBase() {
         t.addView(cab, Vistas.anchoCompleto(this, 4))
         t.addView(Vistas.texto(this, h.detalle), Vistas.anchoCompleto(this, 4))
         if (h.riesgo != Riesgo.INFO) t.addView(Vistas.texto(this, "Qué hacer: " + h.accion, true))
+        val pista = Vistas.texto(this, "Toca para más detalle y acciones", true)
+        pista.textSize = 11f
+        t.addView(pista)
+        t.setOnClickListener { detalleHallazgo(h) }
         return t
     }
 
     private fun tarjetaDispositivo(d: Dispositivo): LinearLayout {
         val t = Vistas.tarjeta(this)
-        val etiqueta = d.tipo.icono + "  " + d.nombreVisible + (if (d.nuevo) "   ● NUEVO" else "")
+        val etiqueta = d.tipo.icono + "  " + d.nombreVisible + (if (d.nuevo) "   ● NUEVO" else if (d.confiable) "   ✓" else "")
         val nombre = Vistas.texto(this, etiqueta)
         nombre.setTypeface(nombre.typeface, Typeface.BOLD)
         nombre.textSize = 15f
@@ -349,7 +370,11 @@ class PrincipalActivity : ActividadBase() {
 
     private fun detalle(d: Dispositivo) {
         val sb = StringBuilder()
+        if (d.alias != null) sb.append("Nombre que le diste: ").append(d.alias).append(if (d.confiable) " (conocido)" else "").append('\n')
+        else if (d.confiable) sb.append("Marcado como conocido.\n")
+        if (d.nombre != null && d.nombre != d.alias) sb.append("Nombre detectado: ").append(d.nombre).append('\n')
         sb.append("IP: ").append(d.ip).append('\n')
+        if (d.ipv6.isNotEmpty()) sb.append("IPv6: ").append(d.ipv6.joinToString(", ")).append('\n')
         if (d.mac != null) sb.append("MAC: ").append(d.mac).append(if (d.macAleatoria) " (aleatoria: el equipo oculta su MAC real)" else "").append('\n')
         if (d.certificado != null) sb.append("Certificado HTTPS: ").append(d.certificado).append('\n')
         if (d.fabricante != null) sb.append("Fabricante: ").append(d.fabricante).append('\n')
@@ -361,7 +386,7 @@ class PrincipalActivity : ActividadBase() {
         }
         if (d.mac == null) sb.append("\nSin dirección MAC: Android 10+ no la deja leer a las apps. Conecta el modo avanzado (ADB) para verla.")
         else if (Oui.buscar(d.mac) != null) sb.append("\nEl fabricante se deduce del prefijo de la MAC (orientativo).")
-        Dialogos.informar(this, d.nombreVisible, sb.toString())
+        dialogoDispositivo(d, sb.toString())
     }
 
     private fun compartir(res: ResultadoAnalisis) {
@@ -467,5 +492,144 @@ class PrincipalActivity : ActividadBase() {
             sb.append("   ").append(e.red).append(" · ").append(e.puntuacion).append("/100 · ").append(e.hash.take(12)).append("…\n")
         }
         Dialogos.informar(this, "Historial de análisis", sb.toString())
+    }
+
+    // ------------------------------------------------------------------ paneles con detalle y acciones
+
+    private fun accion(etiqueta: String, f: () -> Unit): Pair<String, () -> Unit> = Pair(etiqueta, f)
+
+    private fun dialogoConAcciones(titulo: String, mensaje: String, acciones: List<Pair<String, () -> Unit>>) {
+        val b = MaterialAlertDialogBuilder(this).setTitle(titulo).setMessage(mensaje).setNegativeButton("Cerrar", null)
+        if (acciones.isNotEmpty()) {
+            b.setPositiveButton("Acciones…") { _, _ ->
+                Dialogos.elegir(this, titulo, acciones.map { it.first }) { i -> acciones[i].second() }
+            }
+        }
+        b.show()
+    }
+
+    private fun refrescar() {
+        val r = ultimo ?: return
+        mostrarResultado(r)
+    }
+
+    private fun textoHallazgo(h: Hallazgo): String {
+        val sb = StringBuilder(h.riesgo.etiqueta.uppercase()).append(" · ").append(h.titulo).append('\n').append(h.detalle)
+        if (h.riesgo != Riesgo.INFO) sb.append("\nQué hacer: ").append(h.accion)
+        return sb.toString()
+    }
+
+    private fun detalleHallazgo(h: Hallazgo) {
+        val msg = StringBuilder(h.detalle)
+        if (h.riesgo != Riesgo.INFO) msg.append("\n\nQué hacer: ").append(h.accion)
+        if (h.fuente.isNotEmpty()) msg.append("\n\nOrigen de la comprobación: ").append(h.fuente)
+        val acc = ArrayList<Pair<String, () -> Unit>>()
+        for (a in Acciones.paraHallazgo(h, ultimo?.red?.gateway)) acc.add(accion(a.etiqueta) { Acciones.lanzar(this, a) })
+        acc.add(accion("Copiar") { Acciones.copiar(this, textoHallazgo(h)) })
+        acc.add(accion("Compartir") { Acciones.compartir(this, "Hallazgo · El Faro", textoHallazgo(h)) })
+        dialogoConAcciones(h.riesgo.etiqueta.uppercase() + " · " + h.titulo, msg.toString(), acc)
+    }
+
+    private fun detalleSeccion(sec: com.vigia.faro.forense.Seccion) {
+        val texto = sec.lineas.joinToString("\n")
+        val acc = listOf(
+            accion("Copiar") { Acciones.copiar(this, sec.titulo + "\n" + texto) },
+            accion("Compartir") { Acciones.compartir(this, sec.titulo + " · El Faro", sec.titulo + "\n" + texto) }
+        )
+        dialogoConAcciones(sec.titulo, texto, acc)
+    }
+
+    private fun detallePuntuacion(res: ResultadoAnalisis) {
+        val sb = StringBuilder("Se parte de 100 puntos y cada hallazgo resta según su gravedad (la nota mínima es 0):\n\n")
+        var total = 0
+        for (r in Riesgo.values()) {
+            val n = res.informe.hallazgos.count { it.riesgo == r }
+            if (n == 0) continue
+            if (r.peso > 0) {
+                sb.append(r.etiqueta).append(": ").append(n).append(" × ").append(r.peso).append(" = ").append(n * r.peso).append('\n')
+                total += n * r.peso
+            } else {
+                sb.append(r.etiqueta).append(": ").append(n).append(" (informativos, no restan)\n")
+            }
+        }
+        sb.append("\nTotal restado: ").append(total).append("\nResultado: ").append(res.informe.puntuacion).append(" / 100")
+        sb.append("\n\nLa nota resume lo que se pudo comprobar desde un teléfono; no certifica que la red esté limpia.")
+        dialogoConAcciones("Cómo se calcula la puntuación", sb.toString(), emptyList())
+    }
+
+    private fun detalleRed(r: InfoRed) {
+        if (!r.esWifi) return
+        val sb = StringBuilder()
+        sb.append("Nombre: ").append(r.ssid ?: "(oculto por Android: falta el permiso de ubicación)").append('\n')
+        sb.append("BSSID: ").append(r.bssid ?: "?").append('\n')
+        sb.append("Seguridad: ").append(r.seguridad.etiqueta).append('\n')
+        sb.append("IP del teléfono: ").append(r.ipLocal ?: "?").append("/").append(r.prefijo).append('\n')
+        sb.append("Router: ").append(r.gateway ?: "?").append('\n')
+        sb.append("DNS: ").append(if (r.dns.isEmpty()) "?" else r.dns.joinToString(", ")).append('\n')
+        sb.append("Portal cautivo según Android: ").append(if (r.portalMarcado) "sí" else "no")
+        val acc = ArrayList<Pair<String, () -> Unit>>()
+        acc.add(accion("Abrir ajustes Wi-Fi") { Acciones.lanzar(this, AccionSistema("", Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))) })
+        if (r.gateway != null) acc.add(accion("Abrir el panel del router") { Acciones.abrirUrl(this, "http://" + r.gateway) })
+        acc.add(accion("Copiar") { Acciones.copiar(this, sb.toString()) })
+        dialogoConAcciones("Tu red", sb.toString(), acc)
+    }
+
+    private fun urlWeb(d: Dispositivo): String? {
+        val abiertos = d.puertos.map { it.def.puerto }
+        return when {
+            abiertos.contains(443) -> "https://" + d.ip
+            abiertos.contains(8443) -> "https://" + d.ip + ":8443"
+            abiertos.contains(80) -> "http://" + d.ip
+            abiertos.contains(8080) -> "http://" + d.ip + ":8080"
+            else -> null
+        }
+    }
+
+    private fun renombrar(d: Dispositivo) {
+        if (d.mac == null) {
+            Toast.makeText(this, "Sin la MAC (modo avanzado), el nombre se asocia a la IP y puede equivocarse si el router la reparte a otro equipo.", Toast.LENGTH_LONG).show()
+        }
+        Dialogos.pedirTexto(this, "Nombre del equipo", d.alias ?: d.nombreVisible, false, "Guardar") { texto ->
+            Alias.guardar(this, d, texto, d.confiable || texto.isNotBlank())
+            if (d.confiable) d.nuevo = false
+            refrescar()
+        }
+    }
+
+    private fun reescanear(d: Dispositivo) {
+        Toast.makeText(this, "Escaneando " + d.ip + "…", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val nuevos = withContext(Dispatchers.IO) { EscanerPuertos.escanear(d.ip, concurrencia = 10, timeoutMs = 800) }
+            d.puertos.clear()
+            d.puertos.addAll(nuevos)
+            d.certInfo = withContext(Dispatchers.IO) { Orquestador.certificadoDe(d) }
+            refrescar()
+        }
+    }
+
+    private fun dialogoDispositivo(d: Dispositivo, texto: String) {
+        val acc = ArrayList<Pair<String, () -> Unit>>()
+        acc.add(accion("Renombrar…") { renombrar(d) })
+        if (d.alias != null) {
+            acc.add(accion("Quitar el nombre") {
+                Alias.guardar(this, d, null, d.confiable)
+                refrescar()
+            })
+        }
+        acc.add(
+            accion(if (d.confiable) "Quitar la marca de conocido" else "Marcar como conocido") {
+                Alias.guardar(this, d, d.alias, !d.confiable)
+                if (d.confiable) d.nuevo = false
+                refrescar()
+            }
+        )
+        val web = urlWeb(d)
+        if (web != null) acc.add(accion("Abrir su panel web") { Acciones.abrirUrl(this, web) })
+        acc.add(accion("Volver a escanear sus puertos") { reescanear(d) })
+        acc.add(accion("Copiar IP") { Acciones.copiar(this, d.ip) })
+        val mac = d.mac
+        if (mac != null) acc.add(accion("Copiar MAC") { Acciones.copiar(this, mac) })
+        acc.add(accion("Compartir ficha") { Acciones.compartir(this, d.nombreVisible + " · El Faro", d.nombreVisible + "\n" + texto) })
+        dialogoConAcciones(d.nombreVisible, texto, acc)
     }
 }
