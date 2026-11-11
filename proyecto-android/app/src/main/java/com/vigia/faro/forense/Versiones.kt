@@ -27,7 +27,7 @@ object Versiones {
         val res = ArrayList<Aviso>()
         val t = texto
 
-        Regex("""OpenSSH[_ ](\d+)\.(\d+)""").find(t)?.let { m ->
+        Regex("""OpenSSH[_ ](\d+)\.(\d+)""").find(t)?.also { m ->
             val v = nums(m.groupValues[1], m.groupValues[2])
             val nombre = "OpenSSH " + m.groupValues[1] + "." + m.groupValues[2]
             if (cmp(v, intArrayOf(7, 0)) < 0) {
@@ -36,7 +36,7 @@ object Versiones {
                 res.add(Aviso(Riesgo.BAJO, nombre, "Hasta la 7.7 inclusive permite averiguar qué usuarios existen (CVE-2018-15473)."))
             }
         }
-        Regex("""dropbear_(\d{4})\.(\d+)""", RegexOption.IGNORE_CASE).find(t)?.let { m ->
+        Regex("""dropbear_(\d{4})\.(\d+)""", RegexOption.IGNORE_CASE).find(t)?.also { m ->
             val anio = m.groupValues[1].toInt()
             val nombre = "Dropbear " + m.groupValues[1] + "." + m.groupValues[2]
             if (anio < 2017) {
@@ -54,7 +54,7 @@ object Versiones {
         if (Regex("""ProFTPD 1\.3\.3c""", RegexOption.IGNORE_CASE).containsMatchIn(t)) {
             res.add(Aviso(Riesgo.CRITICO, "ProFTPD 1.3.3c", "El código fuente de esa versión se distribuyó con una puerta trasera en 2010."))
         }
-        Regex("""Apache/(\d+)\.(\d+)\.?(\d+)?""").find(t)?.let { m ->
+        Regex("""Apache/(\d+)\.(\d+)\.?(\d+)?""").find(t)?.also { m ->
             val mayor = m.groupValues[1].toInt()
             val menor = m.groupValues[2].toInt()
             val parche = m.groupValues[3].toIntOrNull() ?: -1
@@ -67,13 +67,13 @@ object Versiones {
                 res.add(Aviso(Riesgo.MEDIO, nombre, "La rama " + mayor + "." + menor + " dejó de recibir actualizaciones (2.2 en 2017, 2.0 en 2013)."))
             }
         }
-        Regex("""Microsoft-IIS/(\d+)\.(\d+)""").find(t)?.let { m ->
+        Regex("""Microsoft-IIS/(\d+)\.(\d+)""").find(t)?.also { m ->
             val mayor = m.groupValues[1].toInt()
             if (mayor <= 7) {
                 res.add(Aviso(Riesgo.MEDIO, "IIS " + m.groupValues[1] + "." + m.groupValues[2], "Esa versión de IIS no recibe actualizaciones desde 2015 (6.0) o 2020 (7.x)."))
             }
         }
-        Regex("""OpenSSL/(\d+\.\d+\.\d+)([a-z]?)""").find(t)?.let { m ->
+        Regex("""OpenSSL/(\d+\.\d+\.\d+)([a-z]?)""").find(t)?.also { m ->
             val v = m.groupValues[1]
             val letra = m.groupValues[2]
             val nombre = "OpenSSL " + v + letra
@@ -83,7 +83,7 @@ object Versiones {
                 res.add(Aviso(Riesgo.MEDIO, nombre, "Rama de OpenSSL sin soporte desde 2015-2019."))
             }
         }
-        Regex("""Portable SDK for UPnP devices/(\d+)\.(\d+)\.(\d+)""", RegexOption.IGNORE_CASE).find(t)?.let { m ->
+        Regex("""Portable SDK for UPnP devices/(\d+)\.(\d+)\.(\d+)""", RegexOption.IGNORE_CASE).find(t)?.also { m ->
             val v = nums(m.groupValues[1], m.groupValues[2], m.groupValues[3])
             val nombre = "libupnp " + m.groupValues[1] + "." + m.groupValues[2] + "." + m.groupValues[3]
             if (cmp(v, intArrayOf(1, 6, 18)) < 0) {
@@ -92,13 +92,13 @@ object Versiones {
                 res.add(Aviso(Riesgo.BAJO, nombre, "Anterior a la 1.12.1: afectada por «CallStranger» (CVE-2020-12695), que permite usar el equipo para atacar a terceros."))
             }
         }
-        Regex("""MiniUPnPd/(\d+)\.(\d+)""", RegexOption.IGNORE_CASE).find(t)?.let { m ->
+        Regex("""MiniUPnPd/(\d+)\.(\d+)""", RegexOption.IGNORE_CASE).find(t)?.also { m ->
             val v = nums(m.groupValues[1], m.groupValues[2])
             if (cmp(v, intArrayOf(1, 4)) < 0) {
                 res.add(Aviso(Riesgo.ALTO, "MiniUPnPd " + m.groupValues[1] + "." + m.groupValues[2], "Anterior a la 1.4: tiene un desbordamiento de pila conocido (2013)."))
             }
         }
-        Regex("""dnsmasq-(\d+)\.(\d+)""", RegexOption.IGNORE_CASE).find(t)?.let { m ->
+        Regex("""dnsmasq-(\d+)\.(\d+)""", RegexOption.IGNORE_CASE).find(t)?.also { m ->
             val v = nums(m.groupValues[1], m.groupValues[2])
             if (cmp(v, intArrayOf(2, 83)) < 0) {
                 res.add(Aviso(Riesgo.MEDIO, "dnsmasq " + m.groupValues[1] + "." + m.groupValues[2], "Anterior a la 2.83: afectada por «DNSpooq» (CVE-2020-25681 a 25687), que permite envenenar la caché DNS."))
