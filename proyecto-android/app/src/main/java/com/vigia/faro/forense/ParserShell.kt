@@ -12,7 +12,7 @@ object ParserShell {
 
     // ------------------------------------------------------------------ ip neigh
 
-    class Vecino(val ip: String, val interfaz: String, val mac: String?, val estado: String)
+    class Vecino(val ip: String, val interfaz: String, val mac: String?, val estado: String, val router: Boolean = false)
 
     private val ESTADOS_VECINO = setOf("REACHABLE", "STALE", "DELAY", "PROBE", "FAILED", "INCOMPLETE", "PERMANENT", "NOARP", "NONE")
 
@@ -28,7 +28,28 @@ object ParserShell {
             val iMac = t.indexOf("lladdr")
             val mac = if (iMac >= 0 && iMac + 1 < t.size) t[iMac + 1].lowercase() else null
             val estado = t.lastOrNull { ESTADOS_VECINO.contains(it) } ?: ""
-            res.add(Vecino(ip, t[iDev + 1], if (mac != null && esMac(mac)) mac else null, estado))
+            res.add(Vecino(ip, t[iDev + 1], if (mac != null && esMac(mac)) mac else null, estado, t.contains("router")))
+        }
+        return res
+    }
+
+    // ------------------------------------------------------------------ rutas IPv6
+
+    class RutaDefecto(val via: String, val interfaz: String, val protocolo: String)
+
+    /** Rutas por defecto de IPv6 (`default via fe80::1 dev wlan0 proto ra …`): quién se anuncia como router. */
+    fun rutasDefecto6(texto: String): List<RutaDefecto> {
+        val res = ArrayList<RutaDefecto>()
+        for (linea in texto.lines()) {
+            val t = linea.trim().split(Regex("\\s+"))
+            if (t.size < 5 || t[0] != "default") continue
+            val iVia = t.indexOf("via")
+            val iDev = t.indexOf("dev")
+            if (iVia < 0 || iVia + 1 >= t.size || iDev < 0 || iDev + 1 >= t.size) continue
+            val via = t[iVia + 1]
+            if (!via.contains(':')) continue
+            val iProto = t.indexOf("proto")
+            res.add(RutaDefecto(via.substringBefore('%'), t[iDev + 1], if (iProto >= 0 && iProto + 1 < t.size) t[iProto + 1] else ""))
         }
         return res
     }
