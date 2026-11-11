@@ -15,9 +15,9 @@ import java.util.Random
  */
 object SondaDns {
 
-    class RespuestaDns(val rcode: Int, val ips: List<String>)
+    class RespuestaDns(val rcode: Int, val ips: List<String>, val textos: List<String> = emptyList())
 
-    fun consulta(nombre: String, id: Int): ByteArray {
+    fun consulta(nombre: String, id: Int, tipo: Int = 1, clase: Int = 1): ByteArray {
         val b = ByteArrayOutputStream()
         b.write(id shr 8)
         b.write(id and 0xFF)
@@ -32,10 +32,10 @@ object SondaDns {
             b.write(bytes, 0, bytes.size)
         }
         b.write(0)
-        b.write(0)
-        b.write(1)
-        b.write(0)
-        b.write(1)
+        b.write(tipo shr 8)
+        b.write(tipo and 0xFF)
+        b.write(clase shr 8)
+        b.write(clase and 0xFF)
         return b.toByteArray()
     }
 
@@ -67,6 +67,7 @@ object SondaDns {
             p += 4
         }
         val ips = ArrayList<String>()
+        val textos = ArrayList<String>()
         for (i in 0 until an) {
             p = saltarNombre(d, n, p)
             if (p < 0 || p + 10 > n) break
@@ -77,15 +78,26 @@ object SondaDns {
             if (tipo == 1 && largo == 4) {
                 ips.add((d[p].toInt() and 0xFF).toString() + "." + (d[p + 1].toInt() and 0xFF) + "." + (d[p + 2].toInt() and 0xFF) + "." + (d[p + 3].toInt() and 0xFF))
             }
+            if (tipo == 16 && largo > 0) {
+                // TXT: una o varias cadenas con un byte de longitud delante.
+                var q = p
+                val fin = p + largo
+                while (q < fin) {
+                    val l = d[q].toInt() and 0xFF
+                    if (q + 1 + l > fin) break
+                    textos.add(String(d, q + 1, l, Charsets.UTF_8))
+                    q += 1 + l
+                }
+            }
             p += largo
         }
-        return RespuestaDns(rcode, ips)
+        return RespuestaDns(rcode, ips, textos)
     }
 
     /** Una consulta A por UDP directa a [servidor]. Devuelve null si no contestó. */
-    fun preguntar(servidor: String, nombre: String, timeoutMs: Int): RespuestaDns? {
+    fun preguntar(servidor: String, nombre: String, timeoutMs: Int, tipo: Int = 1, clase: Int = 1): RespuestaDns? {
         val id = Random().nextInt(0xFFFF)
-        val q = consulta(nombre, id)
+        val q = consulta(nombre, id, tipo, clase)
         val s = DatagramSocket()
         return try {
             s.soTimeout = timeoutMs
@@ -99,6 +111,12 @@ object SondaDns {
         } finally {
             s.close()
         }
+    }
+
+    /** Pregunta «version.bind» (clase CHAOS) al DNS del router: dnsmasq y BIND contestan con su versión. Devuelve el texto o null. */
+    fun versionDns(servidor: String): String? {
+        val r = preguntar(servidor, "version.bind", 1500, 16, 3) ?: return null
+        return r.textos.firstOrNull()?.take(80)
     }
 
     private fun sistema(nombre: String): List<String>? {
