@@ -11,6 +11,15 @@
     <!-- Análisis forense del teléfono: ver qué apps hay instaladas y qué accesos especiales tienen (solo lectura, nada sale del teléfono). -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
+    <!-- Análisis Bluetooth (solo escucha; no se conecta a nada). En Android 12+ el escaneo también exige ubicación porque no se declara neverForLocation:
+         así no se filtran los anuncios de rastreadores. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
     <application
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -31,6 +40,10 @@
 
         <activity
             android:name=".AdbActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".BluetoothActivity"
             android:exported="false" />
 
         <!-- Compartir el paquete de evidencia firmado (solo desde la caché de la app). -->
