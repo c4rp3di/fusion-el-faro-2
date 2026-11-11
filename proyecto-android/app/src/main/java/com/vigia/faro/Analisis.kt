@@ -149,7 +149,7 @@ object Analisis {
         for (d in dispositivos) {
             if (d.esRouter) continue
             if (d.nuevo) nuevos++
-            if (d.tipo == Tipo.DESCONOCIDO && !d.esEsteTelefono) sinIdentificar++
+            if (d.tipo == Tipo.DESCONOCIDO && !d.esEsteTelefono && d.alias == null && !d.confiable) sinIdentificar++
             val cuando = if (d.esEsteTelefono) "Este teléfono" else d.nombreVisible + " (" + d.ip + ")"
             for (p in d.puertos) {
                 val def = p.def
