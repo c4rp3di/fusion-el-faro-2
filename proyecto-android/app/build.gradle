@@ -26,8 +26,8 @@ android {
         // 26: Process.waitFor(timeout) y varias APIs de red de Android 8.
         minSdk 26
         targetSdk 34
-        versionCode 2
-        versionName "v2.0"
+        versionCode 3
+        versionName "v3.0"
     }
 
     compileOptions {
