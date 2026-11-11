@@ -36,6 +36,9 @@ object Evidencia {
             .put("fabricante", d.fabricante ?: JSONObject.NULL)
             .put("modelo", d.modelo ?: JSONObject.NULL)
             .put("nombre", d.nombre ?: JSONObject.NULL)
+            .put("alias", d.alias ?: JSONObject.NULL)
+            .put("confiable", d.confiable)
+            .put("ipv6", JSONArray(d.ipv6.toList()))
             .put("tipo", d.tipo.etiqueta)
             .put("es_router", d.esRouter)
             .put("es_este_telefono", d.esEsteTelefono)
@@ -109,13 +112,16 @@ object Evidencia {
     }
 
     /** Guarda el paquete firmado en la caché de la app y devuelve su URI para compartirlo. */
-    fun exportar(c: Context, res: ResultadoAnalisis): Uri {
-        val sobre = Firma.sobre(res.evidencia)
+    fun exportar(c: Context, res: ResultadoAnalisis): Uri = exportarContenido(c, "faro-evidencia", res.momento, res.evidencia)
+
+    /** Firma [contenido] (un texto JSON) y lo guarda como «prefijo-fecha.json» en la caché de la app. */
+    fun exportarContenido(c: Context, prefijo: String, momento: Long, contenido: String): Uri {
+        val sobre = Firma.sobre(contenido)
         val dir = File(c.cacheDir, "evidencia")
         dir.mkdirs()
         val viejos = dir.listFiles()
         if (viejos != null) for (v in viejos) v.delete()
-        val nombre = "faro-evidencia-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(res.momento)) + ".json"
+        val nombre = prefijo + "-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(momento)) + ".json"
         val f = File(dir, nombre)
         f.writeText(sobre.toString(2), Charsets.UTF_8)
         return FileProvider.getUriForFile(c, c.packageName + ".archivos", f)
