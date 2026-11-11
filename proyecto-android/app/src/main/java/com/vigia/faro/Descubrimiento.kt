@@ -66,8 +66,17 @@ class Dispositivo(val ip: String) {
     /** Identificador lo más estable posible para reconocerlo en otra visita. */
     val identificador: String get() = mac ?: nombre ?: ip
 
+    /** Nombre que le puso el usuario (se guarda cifrado; ver [Alias]). */
+    var alias: String? = null
+
+    /** El usuario lo marcó como «conocido»: no se avisa como nuevo ni cuenta como sin identificar. */
+    var confiable = false
+
+    /** Direcciones IPv6 del equipo (por la tabla de vecinos o por su MAC en EUI-64). */
+    val ipv6 = LinkedHashSet<String>()
+
     val nombreVisible: String
-        get() = nombre ?: modelo ?: fabricante ?: tipo.etiqueta
+        get() = alias ?: nombre ?: modelo ?: fabricante ?: tipo.etiqueta
 }
 
 class RespuestaSsdp(val ip: String, val st: String, val usn: String, val servidor: String, val ubicacion: String)
@@ -422,15 +431,15 @@ object Descubridor {
         fun contiene(vararg claves: String): Boolean = claves.any { texto.contains(it) }
         d.tipo = when {
             abiertos.contains(9100) || abiertos.contains(631) || abiertos.contains(515) ||
-                contiene("_ipp", "_printer", "printer", "impresora", "laserjet", "deskjet", "officejet", "epson", "brother") -> Tipo.IMPRESORA
-            abiertos.contains(554) || contiene("camera", "ipcam", "hikvision", "dahua", "reolink", "imou", "tapo", "wyze") -> Tipo.CAMARA
+                contiene("_ipp", "_printer", "printer", "impresora", "laserjet", "deskjet", "officejet", "epson", "brother", "printdevicetype") -> Tipo.IMPRESORA
+            abiertos.contains(554) || contiene("camera", "ipcam", "hikvision", "dahua", "reolink", "imou", "tapo", "wyze", "networkvideotransmitter", "onvif") -> Tipo.CAMARA
             abiertos.contains(8008) || abiertos.contains(8009) ||
                 contiene("_googlecast", "chromecast", "bravia", "tizen", "webos", "roku", "firetv", "smarttv", "mediarenderer", "android tv", "_airplay") -> Tipo.TV
             contiene("sonos", "alexa", "echo", "homepod", "_hap", "homekit", "hue", "nest", "_spotify-connect", "espressif", "tuya", "shelly") -> Tipo.ALTAVOZ
             abiertos.contains(5000) || contiene("synology", "diskstation", "qnap", "nas", "readynas") -> Tipo.NAS
             abiertos.contains(62078) || contiene("iphone", "ipad", "android", "galaxy", "pixel", "xiaomi", "redmi", "huawei", "oneplus", "oppo", "_companion-link") -> Tipo.MOVIL
             abiertos.contains(445) || abiertos.contains(139) || abiertos.contains(3389) || abiertos.contains(5900) ||
-                contiene("desktop", "laptop", "windows", "macbook", "imac", "_workstation", "_smb", "raspberry", "vmware", "virtualbox", "qemu") -> Tipo.PC
+                contiene("desktop", "laptop", "windows", "macbook", "imac", "_workstation", "_smb", "raspberry", "vmware", "virtualbox", "qemu", "pub:computer") -> Tipo.PC
             else -> Tipo.DESCONOCIDO
         }
     }
