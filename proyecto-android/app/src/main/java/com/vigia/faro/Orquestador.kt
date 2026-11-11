@@ -13,6 +13,10 @@ import com.vigia.faro.forense.DetallesWifi
 import com.vigia.faro.forense.Evidencia
 import com.vigia.faro.forense.Huellas
 import com.vigia.faro.forense.Indicadores
+import com.vigia.faro.forense.Ipv6
+import com.vigia.faro.forense.NatPmp
+import com.vigia.faro.forense.Versiones
+import com.vigia.faro.forense.WsDiscovery
 import com.vigia.faro.forense.LineaBase
 import com.vigia.faro.forense.Libro
 import com.vigia.faro.forense.Oui
@@ -81,6 +85,8 @@ object Orquestador {
         // UPnP y mDNS escuchan mientras se hace el resto.
         val ssdpTarea = async { Descubridor.ssdp(app, 3500L) }
         val mdnsTarea = if (completo) async { Descubridor.mdns(app, 7000L) } else null
+        val wsdTarea = if (completo) async { WsDiscovery.descubrir(app, 3500L) } else null
+        val ipv6Tarea = if (completo) async(Dispatchers.IO) { Ipv6.descubrir(Ipv6.nombreInterfaz(app)) } else null
 
         // Pruebas de red en paralelo. Cada una escribe en su propio DatosForenses para no mezclar hilos.
         val datosWifi = DatosForenses()
@@ -135,6 +141,20 @@ object Orquestador {
             null
         }
 
+        // ---- comprobaciones UDP contra el propio router (solo lectura, no salen de la red local)
+        var versionDnsRouter: String? = null
+        if (gateway != null) {
+            val natpmp = withContext(Dispatchers.IO) { NatPmp.consultar(gateway) }
+            if (natpmp != null) {
+                datos.hallazgo(
+                    Riesgo.BAJO, "El router responde a NAT-PMP",
+                    "Igual que UPnP, NAT-PMP permite que cualquier programa de la red pida al router que abra puertos hacia internet, sin contraseña. Su IP externa según NAT-PMP es " + natpmp.ipExterna + ".",
+                    "Si no lo necesitas, desactiva UPnP y NAT-PMP en el router.", "UPnP"
+                )
+            }
+            versionDnsRouter = withContext(Dispatchers.IO) { SondaDns.versionDns(gateway) }
+        }
+
         // ---- teléfono (apps) y modo avanzado
         val apps: List<AppInfo> = if (op.forense) {
             withContext(Dispatchers.IO) {
@@ -176,6 +196,8 @@ object Orquestador {
             for ((ip, _) in vecinos) if (ips.contains(ip)) todos.add(ip)
             for (r in ssdp) if (ips.contains(r.ip)) todos.add(r.ip)
             val servicios = mdnsTarea?.await() ?: emptyList()
+            val wsd = wsdTarea?.await() ?: emptyList()
+            for (r in wsd) if (ips.contains(r.ip)) todos.add(r.ip)
             for (s in servicios) if (ips.contains(s.ip)) todos.add(s.ip)
             todos.add(red.ipLocal)
             if (gateway != null) todos.add(gateway)
@@ -190,6 +212,7 @@ object Orquestador {
                         if (d.nombre == null && s.nombre.isNotEmpty()) d.nombre = s.nombre
                     }
                 }
+                for (r in wsd) if (r.ip == ip) d.servicios.add(WsDiscovery.resumen(r))
                 for (r in ssdp) {
                     if (r.ip == ip) {
                         if (r.servidor.isNotEmpty()) d.servicios.add(r.servidor)
@@ -238,6 +261,32 @@ object Orquestador {
             Descubridor.clasificar(router)
         }
 
+        // Nombres y marcas del usuario.
+        val aNombrar = ArrayList<Dispositivo>(lista)
+        if (router != null && !aNombrar.contains(router)) aNombrar.add(router)
+        Alias.aplicar(app, aNombrar)
+
+        // Versiones que anuncian los equipos (banners y cabeceras UPnP) frente a los casos conocidos.
+        for (d in aNombrar) {
+            val textos = ArrayList<String>()
+            for (p in d.puertos) if (p.banner != null) textos.add(p.banner)
+            textos.addAll(d.servicios)
+            if (d.esRouter && versionDnsRouter != null) textos.add(versionDnsRouter)
+            val vistos = HashSet<String>()
+            val quien = if (d.esRouter) "el router" else d.nombreVisible + " (" + d.ip + ")"
+            for (t in textos) {
+                for (a in Versiones.evaluar(t)) {
+                    if (!vistos.add(a.producto)) continue
+                    datos.hallazgo(
+                        a.riesgo, a.producto + " en " + quien,
+                        a.detalle + " Se deduce de la versión que anuncia el equipo: algunos fabricantes corrigen el fallo sin cambiar el número.",
+                        "Actualiza el firmware o el software del equipo. Si ya no tiene soporte, sustitúyelo o aíslalo de la red.", "Versiones"
+                    )
+                }
+            }
+        }
+        if (versionDnsRouter != null) datos.seccion("DNS del router", listOf("Versión que anuncia: " + versionDnsRouter))
+
         // ---- dispositivos nuevos respecto a la última visita
         if (completo) {
             val previos = Conocidos.cargar(app, red.idRed)
@@ -246,7 +295,7 @@ object Orquestador {
                 val id = d.mac ?: d.nombre
                 if (id != null) {
                     actuales.add(id)
-                    if (previos != null && !previos.contains(id) && !d.esEsteTelefono && !d.esRouter) d.nuevo = true
+                    if (previos != null && !previos.contains(id) && !d.esEsteTelefono && !d.esRouter && !d.confiable) d.nuevo = true
                 }
             }
             Conocidos.guardar(app, red.idRed, actuales)
@@ -259,6 +308,12 @@ object Orquestador {
         datos.anadir(datosDns)
         datos.anadir(datosTls)
         datos.anadir(datosTraza)
+
+        // ---- IPv6 en la red local
+        if (completo) {
+            val respondieron = ipv6Tarea?.await() ?: emptyList()
+            Ipv6.analizar(datos, respondieron, Ipv6.direccionesGlobales(app), salidaAdb, lista, gateway)
+        }
 
         // ---- UPnP avanzado, certificados de equipos
         if (upnp != null) AnalisisUpnp.analizar(datos, upnp, lista.map { it.ip }.toSet())
@@ -341,7 +396,7 @@ object Orquestador {
         res
     }
 
-    private fun certificadoDe(d: Dispositivo): CertDispositivo.Info? {
+    fun certificadoDe(d: Dispositivo): CertDispositivo.Info? {
         val p = d.puertos.firstOrNull { it.def.puerto == 443 } ?: d.puertos.firstOrNull { it.def.puerto == 8443 } ?: return null
         return CertDispositivo.leer(d.ip, p.def.puerto)
     }
