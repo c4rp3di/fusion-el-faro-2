@@ -1,4 +1,4 @@
-# El Faro 2.0 · edición forense
+# El Faro 2.1 · edición forense
 
 Sin compilar. Revisión estática hecha; con espejos en Python se comprobaron los lectores de `ip neigh`, del escaneo Wi-Fi,
 de `/proc/net/tcp` (direcciones IPv4/IPv6 en hexadecimal), de `appops`, de `getprop`, de `device_policy`, de `cmd wifi status`
@@ -7,6 +7,22 @@ corrección tras compilar. Pásame el log.
 
 Dependencias nuevas (las mismas versiones que Vigía, ya compiladas allí): libadb-android 1.0.1, sun-security-android 1.1 y
 conscrypt-android 2.5.2, desde JitPack con filtro (`settings.gradle`).
+
+## Novedades de la 2.1
+- **Nombres de equipos**: toca un equipo > «Renombrar…». El nombre y la marca de «conocido» se guardan cifrados (por MAC; sin MAC, por IP).
+  Un equipo nombrado o conocido deja de contar como «sin identificar» y de avisarse como «NUEVO». También en Bluetooth.
+- **Paneles con detalle y acciones**: toca un hallazgo (detalle, qué hacer, atajos a los ajustes de Android o al panel del router, copiar y
+  compartir), una sección (texto completo), la puntuación (cómo se calcula), «Tu red» o un equipo (renombrar, marcar como conocido, abrir su
+  panel web, volver a escanear sus puertos, copiar IP/MAC, compartir ficha).
+- **Bluetooth** (pantalla aparte, análisis puntual de unos 20 s): dispositivos BLE y clásicos con fabricante, clase y cercanía; posibles
+  rastreadores (Apple «Buscar», Samsung SmartTag, Tile); si el teléfono es visible para todos; dispositivos emparejados; evidencia firmada.
+- **IPv6**: ping a ff02::1 para ver equipos que solo hablan IPv6 (con ADB, su MAC y qué routers se anuncian: detecta anuncios de router
+  falsos y un «router IPv6» distinto del IPv4); dirección IPv6 pública del teléfono (exposición sin NAT).
+- **WS-Discovery** (UDP 3702): cámaras ONVIF, impresoras y equipos Windows dicen lo que son; mejora la clasificación.
+- **NAT-PMP** (UDP 5351) y **versión del DNS del router** (`version.bind`, la anuncian dnsmasq y BIND).
+- **Versiones conocidas**: compara los banners (SSH, FTP, HTTP, UPnP, DNS) con un conjunto pequeño y revisado a mano: vsftpd 2.3.4, ProFTPD
+  1.3.3c, Apache 2.4.49/2.4.50, OpenSSL con Heartbleed, libupnp < 1.6.18, MiniUPnPd < 1.4, dnsmasq < 2.83 (DNSpooq), OpenSSH, Dropbear,
+  SSH 1, IIS, Apache 2.0/2.2 sin soporte. NO es una base de datos de CVE.
 
 ## Tres botones
 - **Solo router y red**: lo de antes + UPnP avanzado, DHCP, Wi-Fi, DNS, TLS, ruta y comparación con la visita anterior.
@@ -58,9 +74,18 @@ Evidencia:
 - La tabla OUI es parcial y orientativa. Las MAC aleatorias no tienen fabricante.
 - La detección de gemelo malvado y de ARP spoofing son indicios, no pruebas: cada hallazgo explica los casos legítimos.
 - Solo IPv4 en el barrido; no revisa UDP salvo las consultas DNS; no compara versiones con CVE. minSdk 26; ADB necesita Android 11+.
-- No hay vigilancia continua en segundo plano.
+- No hay vigilancia continua en segundo plano (decisión de diseño: es una herramienta de análisis puntual).
+- No se sondea SNMP: la consulta habitual usa la comunidad «public», que es una contraseña por defecto, y El Faro no prueba contraseñas.
+- No hay captura pasiva de tráfico.
+- Bluetooth: muchos dispositivos cambian su dirección, así que el nombre que les des puede no reconocerse la próxima vez; la detección de
+  rastreadores es un indicio de una sola toma (no sabe si te siguen). El escaneo exige el permiso de ubicación en todas las versiones.
+- La tabla de versiones es pequeña: que no salga nada no significa que el equipo esté al día, y puede haber falsos positivos si el fabricante
+  corrige sin cambiar el número de versión.
 
 ## Cómo probarla
+0. (2.1) Toca un equipo > «Renombrar…» y vuelve a analizar: debe conservar el nombre. Toca un hallazgo: debe ofrecer atajos a los ajustes.
+   Abre «Análisis Bluetooth», concede los permisos y comprueba que aparece lo que tienes alrededor. Con un AirTag o SmartTag cerca debe
+   salir «Posible rastreador».
 1. «Solo router y red» en tu Wi-Fi: debe mostrar UPnP (reenvíos), DNS, HTTPS y ruta, además de lo de antes.
 2. «Modo avanzado (ADB)»: emparejar y conectar (pantalla dividida para ver el código). Luego «Análisis forense total»:
    debe aparecer la tabla ARP con MAC y fabricante, y las secciones de Wi-Fi, conexiones y apps.
